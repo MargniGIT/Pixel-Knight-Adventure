@@ -71,6 +71,138 @@ let enemies = [];
 let DEBUG_MODE = false; // Add debug mode flag
 let debugInfo = []; // Array to store debug visualization data
 
+// Sound system
+const soundEnabled = true;
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const sounds = {
+    jump: null,
+    coin: null,
+    damage: null,
+    backgroundMusic: null
+};
+
+// Initialize sounds
+function initSounds() {
+    if (!soundEnabled) return;
+    
+    try {
+        // Jump sound - short upward beep
+        sounds.jump = createSound(function(time) {
+            const oscillator = audioContext.createOscillator();
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(300, time);
+            oscillator.frequency.exponentialRampToValueAtTime(600, time + 0.1);
+            return oscillator;
+        }, 0.1);
+        
+        // Coin pickup sound - short high-pitched beep
+        sounds.coin = createSound(function(time) {
+            const oscillator = audioContext.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, time);
+            oscillator.frequency.exponentialRampToValueAtTime(1200, time + 0.1);
+            return oscillator;
+        }, 0.1);
+        
+        // Damage sound - descending tone
+        sounds.damage = createSound(function(time) {
+            const oscillator = audioContext.createOscillator();
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(400, time);
+            oscillator.frequency.exponentialRampToValueAtTime(100, time + 0.3);
+            return oscillator;
+        }, 0.3);
+        
+        // Background music - simple looping pattern
+        sounds.backgroundMusic = createLoopingMusic();
+        
+        console.log("Sounds initialized");
+    } catch (e) {
+        console.error("Error initializing sounds:", e);
+    }
+}
+
+// Create a simple sound
+function createSound(setupOscillator, duration) {
+    return function(volume = 0.2) {
+        if (!soundEnabled) return;
+        
+        try {
+            const time = audioContext.currentTime;
+            const gainNode = audioContext.createGain();
+            const oscillator = setupOscillator(time);
+            
+            gainNode.gain.setValueAtTime(volume, time);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, time + duration);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start(time);
+            oscillator.stop(time + duration);
+        } catch (e) {
+            console.error("Error playing sound:", e);
+        }
+    };
+}
+
+// Create looping background music
+function createLoopingMusic() {
+    let isPlaying = false;
+    let musicInterval;
+    
+    const notes = [262, 330, 392, 523, 392, 330];
+    const durations = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+    let noteIndex = 0;
+    
+    function playNote() {
+        if (!soundEnabled || !isPlaying) return;
+        
+        try {
+            const time = audioContext.currentTime;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(notes[noteIndex], time);
+            
+            gainNode.gain.setValueAtTime(0.1, time);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, time + durations[noteIndex] * 0.9);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start(time);
+            oscillator.stop(time + durations[noteIndex]);
+            
+            noteIndex = (noteIndex + 1) % notes.length;
+        } catch (e) {
+            console.error("Error playing music note:", e);
+        }
+    }
+    
+    return {
+        play: function() {
+            if (isPlaying) return;
+            
+            isPlaying = true;
+            noteIndex = 0;
+            musicInterval = setInterval(playNote, 500);
+            playNote();
+        },
+        stop: function() {
+            isPlaying = false;
+            clearInterval(musicInterval);
+        }
+    };
+}
+
+// Play a sound
+function playSound(soundName, volume) {
+    if (!soundEnabled || !sounds[soundName]) return;
+    sounds[soundName](volume);
+}
+
 function init() {
     console.log("Initializing game...");
     
@@ -111,6 +243,9 @@ function init() {
     setupEventListeners();
     setupButtonControls();
     
+    // Initialize sounds
+    initSounds();
+    
     // Start game loop
     lastTime = performance.now();
     requestAnimationFrame(gameLoop);
@@ -120,6 +255,14 @@ function init() {
         if (e.key === '`' || e.key === 'Backquote') { // Change to grave key (backtick)
             DEBUG_MODE = !DEBUG_MODE;
             console.log('Debug mode:', DEBUG_MODE);
+        }
+    });
+    
+    // Start background music after a user interaction
+    window.addEventListener('click', function startMusic() {
+        if (sounds.backgroundMusic) {
+            sounds.backgroundMusic.play();
+            window.removeEventListener('click', startMusic);
         }
     });
     
@@ -783,6 +926,9 @@ function doJump() {
         character.jumpCooldown = 0.3;
         character.pos_y -= 1; // Small boost to ensure leaving ground
         character.forceJump = true;
+        
+        // Play jump sound
+        playSound('jump');
     }
 }
 
@@ -1269,6 +1415,9 @@ function checkCollisions() {
         )) {
             collectible.collected = true;
             score += 10;
+            
+            // Play coin sound
+            playSound('coin');
         }
     });
     
@@ -1298,6 +1447,10 @@ function checkCollisions() {
             character.vel_y = character.jumpSpeed * 0.7; // Bounce
             enemy.defeated = true; // Defeat the enemy
             score += 50;
+            
+            // Play jump sound (reuse for bounce)
+            playSound('jump', 0.15);
+            
             return; // Skip further checks for this enemy
         }
         
@@ -1305,6 +1458,9 @@ function checkCollisions() {
         if (checkCharacterEnemyCollision(enemy)) {
             // Character hit by enemy
             loseLife();
+            
+            // Play damage sound
+            playSound('damage');
         }
     });
 }
