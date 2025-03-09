@@ -58,7 +58,8 @@ const keys = {
 const KEY_CODES = {
     LEFT: ['ArrowLeft', 'KeyA'],
     RIGHT: ['ArrowRight', 'KeyD'],
-    JUMP: ['Space', 'ArrowUp', 'KeyW']
+    JUMP: ['Space', 'ArrowUp', 'KeyW'],
+    DEBUG: ['Backquote', '`', 'Backtick'] // Add debug key codes
 };
 
 // Game objects
@@ -108,6 +109,7 @@ function init() {
     
     // Set up event listeners
     setupEventListeners();
+    setupButtonControls();
     
     // Start game loop
     lastTime = performance.now();
@@ -657,20 +659,8 @@ function createCharacterSprite() {
 
 // Set up event listeners
 function setupEventListeners() {
-    console.log("Setting up event listeners...");
-    
-    // Clear any existing event listeners
-    document.removeEventListener('keydown', handleKeyDown);
-    document.removeEventListener('keyup', handleKeyUp);
-    
-    // Set up keyboard controls
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    
-    // Set up button controls
-    setupButtonControls();
-    
-    console.log("Event listeners set up");
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 }
 
 // Handle key down events
