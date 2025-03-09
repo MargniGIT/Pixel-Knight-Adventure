@@ -6,7 +6,7 @@ A simple 2D side-scrolling platformer game built with vanilla JavaScript and HTM
 
 ## Play Online
 
-You can play the game online at: [Pixel Knight Adventure](#) (Link will be updated once deployed)
+You can play the game online at: [Pixel Knight Adventure](https://margnigit.github.io/Pixel-Knight-Adventure/)
 
 ## Features
 
@@ -65,4 +65,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Credits
 
-Created by [Your Name] as a simple demonstration of 2D game development with JavaScript and Canvas. 
+Created by MargniGIT as a simple demonstration of 2D game development with JavaScript and Canvas. 
