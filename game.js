@@ -223,7 +223,10 @@ function addEnemy(x, y, type, leftBound, rightBound) {
         animationFrame: 0,
         animationTimer: 0,
         pixelMasks: createEnemyPixelMasks(type), // Add pixel masks for collision detection
-        defeated: false // Add a defeated state
+        defeated: false, // Add a defeated state
+        respawnTimer: 0, // Add respawn timer
+        originalX: x, // Store original position for respawning
+        originalY: y
     });
 }
 
@@ -1202,8 +1205,22 @@ function checkVerticalCollision(x, newY) {
 // Update enemies
 function updateEnemies(dt) {
     enemies.forEach(enemy => {
-        // Skip defeated enemies
-        if (enemy.defeated) return;
+        // Handle defeated enemies
+        if (enemy.defeated) {
+            // Increment respawn timer
+            enemy.respawnTimer += dt;
+            
+            // Respawn after 5 seconds
+            if (enemy.respawnTimer >= 5) {
+                enemy.defeated = false;
+                enemy.respawnTimer = 0;
+                enemy.x = enemy.originalX;
+                enemy.y = enemy.originalY;
+                enemy.vel_x = 50 * (Math.random() > 0.5 ? 1 : -1); // Randomize direction
+                enemy.facingRight = enemy.vel_x > 0;
+            }
+            return;
+        }
         
         // Move enemy
         enemy.x += enemy.vel_x * dt;
@@ -1720,6 +1737,14 @@ function drawDefeatedEnemy(enemy) {
     // Draw a simple "defeated" state - you can customize this
     ctx.fillStyle = '#888888'; // Gray color for defeated enemies
     ctx.fillRect(baseX + 4, baseY + 12, 8, 4); // Flattened shape
+    
+    // Draw respawn indicator
+    const respawnProgress = enemy.respawnTimer / 5; // 5 seconds to respawn
+    const respawnWidth = 16 * respawnProgress;
+    
+    // Draw respawn progress bar
+    ctx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // Semi-transparent green
+    ctx.fillRect(baseX, baseY - 5, respawnWidth, 2);
 }
 
 // Initialize the game
