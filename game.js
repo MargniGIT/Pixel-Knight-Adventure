@@ -67,6 +67,9 @@ let collectibles = [];
 let enemies = [];
 
 // Initialize the game
+let DEBUG_MODE = false; // Add debug mode flag
+let debugInfo = []; // Array to store debug visualization data
+
 function init() {
     console.log("Initializing game...");
     
@@ -109,6 +112,14 @@ function init() {
     // Start game loop
     lastTime = performance.now();
     requestAnimationFrame(gameLoop);
+    
+    // Add debug mode toggle
+    window.addEventListener('keydown', function(e) {
+        if (e.key === '`' || e.key === 'Backquote') { // Change to grave key (backtick)
+            DEBUG_MODE = !DEBUG_MODE;
+            console.log('Debug mode:', DEBUG_MODE);
+        }
+    });
     
     console.log("Game initialized");
 }
@@ -210,7 +221,269 @@ function addEnemy(x, y, type, leftBound, rightBound) {
         rightBound: rightBound,
         facingRight: true,
         animationFrame: 0,
-        animationTimer: 0
+        animationTimer: 0,
+        pixelMasks: createEnemyPixelMasks(type), // Add pixel masks for collision detection
+        defeated: false // Add a defeated state
+    });
+}
+
+// Create pixel masks for an enemy type
+function createEnemyPixelMasks(type) {
+    const masks = [];
+    
+    switch(type) {
+        case 'slime':
+            // Create masks for both animation frames
+            masks.push(createSlimeMask(0)); // Frame 0
+            masks.push(createSlimeMask(1)); // Frame 1
+            break;
+        case 'robot':
+            // Create masks for both animation frames
+            masks.push(createRobotMask(0)); // Frame 0
+            masks.push(createRobotMask(1)); // Frame 1
+            break;
+        case 'bat':
+            // Create masks for both animation frames
+            masks.push(createBatMask(0)); // Frame 0
+            masks.push(createBatMask(1)); // Frame 1
+            break;
+    }
+    
+    return masks;
+}
+
+// Create a pixel mask for a slime enemy
+function createSlimeMask(frame) {
+    const mask = create2DArray(16, 16, false);
+    
+    // Base shape depends on animation frame
+    if (frame === 0) {
+        // Compressed shape
+        fillRectInMask(mask, 2, 6, 12, 10);
+        fillRectInMask(mask, 1, 8, 14, 8);
+    } else {
+        // Extended shape
+        fillRectInMask(mask, 2, 4, 12, 12);
+        fillRectInMask(mask, 1, 6, 14, 10);
+    }
+    
+    // Eyes and mouth don't affect collision
+    
+    return mask;
+}
+
+// Create a pixel mask for a robot enemy
+function createRobotMask(frame) {
+    const mask = create2DArray(16, 16, false);
+    
+    // Robot body
+    fillRectInMask(mask, 2, 2, 12, 12);
+    
+    // Legs
+    if (frame === 0) {
+        // First leg position
+        fillRectInMask(mask, 3, 14, 3, 2);
+        fillRectInMask(mask, 10, 14, 3, 2);
+    } else {
+        // Second leg position
+        fillRectInMask(mask, 4, 14, 3, 2);
+        fillRectInMask(mask, 9, 14, 3, 2);
+    }
+    
+    // Arms
+    fillRectInMask(mask, 1, 6, 1, 4);
+    fillRectInMask(mask, 14, 6, 1, 4);
+    
+    // Antenna
+    fillRectInMask(mask, 8, 0, 1, 2);
+    
+    return mask;
+}
+
+// Create a pixel mask for a bat enemy
+function createBatMask(frame) {
+    const mask = create2DArray(16, 16, false);
+    
+    // Bat body
+    fillRectInMask(mask, 6, 6, 4, 6);
+    
+    // Wings
+    if (frame === 0) {
+        // Wings up
+        fillRectInMask(mask, 2, 2, 4, 6);
+        fillRectInMask(mask, 10, 2, 4, 6);
+    } else {
+        // Wings down
+        fillRectInMask(mask, 2, 6, 4, 6);
+        fillRectInMask(mask, 10, 6, 4, 6);
+    }
+    
+    // Fangs
+    fillRectInMask(mask, 6, 12, 1, 2);
+    fillRectInMask(mask, 9, 12, 1, 2);
+    
+    return mask;
+}
+
+// Create a 2D array filled with a default value
+function create2DArray(width, height, defaultValue) {
+    const array = [];
+    for (let y = 0; y < height; y++) {
+        array[y] = [];
+        for (let x = 0; x < width; x++) {
+            array[y][x] = defaultValue;
+        }
+    }
+    return array;
+}
+
+// Fill a rectangle in a mask with true values
+function fillRectInMask(mask, x, y, width, height) {
+    for (let dy = 0; dy < height; dy++) {
+        for (let dx = 0; dx < width; dx++) {
+            if (y + dy < mask.length && x + dx < mask[0].length) {
+                mask[y + dy][x + dx] = true;
+            }
+        }
+    }
+}
+
+// Check for collision between character and enemy using pixel-perfect collision
+function checkCharacterEnemyCollision(enemy) {
+    // First do a bounding box check
+    const characterBox = {
+        x: character.pos_x,
+        y: character.pos_y,
+        width: character.width,
+        height: character.height
+    };
+    
+    const enemyBox = {
+        x: enemy.x,
+        y: enemy.y,
+        width: enemy.width,
+        height: enemy.height
+    };
+    
+    // Check if bounding boxes overlap
+    const boxesOverlap = checkRectCollision(
+        characterBox.x, characterBox.y, characterBox.width, characterBox.height,
+        enemyBox.x, enemyBox.y, enemyBox.width, enemyBox.height
+    );
+    
+    if (!boxesOverlap) {
+        // If debug mode is on, draw the character hitbox in red
+        if (DEBUG_MODE) {
+            drawDebugBox(characterBox, '#FF0000'); // Red for character
+            drawDebugBox(enemyBox, '#FF0000'); // Red for enemy
+        }
+        return false;
+    }
+    
+    // Calculate the overlapping rectangle
+    const overlapBox = {
+        x: Math.max(characterBox.x, enemyBox.x),
+        y: Math.max(characterBox.y, enemyBox.y),
+        width: Math.min(characterBox.x + characterBox.width, enemyBox.x + enemyBox.width) - Math.max(characterBox.x, enemyBox.x),
+        height: Math.min(characterBox.y + characterBox.height, enemyBox.y + enemyBox.height) - Math.max(characterBox.y, enemyBox.y)
+    };
+    
+    // For debugging, draw the boxes
+    if (DEBUG_MODE) {
+        drawDebugBox(characterBox, '#FF0000'); // Red for character
+        drawDebugBox(enemyBox, '#FF0000'); // Red for enemy
+        drawDebugBox(overlapBox, '#00FF00'); // Green for intersection
+    }
+    
+    // If bounding boxes collide, do a pixel-perfect check
+    const characterFrame = character.animationFrame;
+    const enemyFrame = enemy.animationFrame;
+    
+    // Check each pixel in the overlapping area
+    for (let y = 0; y < overlapBox.height; y++) {
+        for (let x = 0; x < overlapBox.width; x++) {
+            // Calculate pixel positions in each sprite's local coordinate system
+            const characterLocalX = overlapBox.x + x - characterBox.x;
+            const characterLocalY = overlapBox.y + y - characterBox.y;
+            const enemyLocalX = overlapBox.x + x - enemyBox.x;
+            const enemyLocalY = overlapBox.y + y - enemyBox.y;
+            
+            // Handle character sprite flipping
+            let characterPixelX = characterLocalX;
+            if (!character.facingRight) {
+                characterPixelX = character.width - 1 - characterLocalX;
+            }
+            
+            // Check if both pixels are solid
+            let characterPixelSolid = false;
+            if (characterPixelX >= 0 && characterPixelX < character.width && 
+                characterLocalY >= 0 && characterLocalY < character.height) {
+                if (character.sprite && 
+                    character.sprite[characterFrame] && 
+                    character.sprite[characterFrame][characterLocalY]) {
+                    const pixelColor = character.sprite[characterFrame][characterLocalY][characterPixelX];
+                    characterPixelSolid = pixelColor !== null;
+                }
+            }
+            
+            let enemyPixelSolid = false;
+            if (enemyLocalX >= 0 && enemyLocalX < enemy.width && 
+                enemyLocalY >= 0 && enemyLocalY < enemy.height) {
+                if (enemy.pixelMasks && 
+                    enemy.pixelMasks[enemyFrame] && 
+                    enemy.pixelMasks[enemyFrame][enemyLocalY] && 
+                    enemy.pixelMasks[enemyFrame][enemyLocalY][enemyLocalX] === true) {
+                    enemyPixelSolid = true;
+                }
+            }
+            
+            if (characterPixelSolid && enemyPixelSolid) {
+                // If debug mode is on, highlight the pixel where collision occurs
+                if (DEBUG_MODE) {
+                    drawDebugPixel(overlapBox.x + x, overlapBox.y + y, '#FFFF00'); // Yellow for collision point
+                }
+                return true; // Collision detected
+            }
+        }
+    }
+    
+    return false; // No collision
+}
+
+// Draw a debug box with the specified color
+function drawDebugBox(box, color) {
+    // Store debug info for later rendering
+    debugInfo.push({
+        type: 'box',
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        color: color
+    });
+}
+
+// Draw a debug pixel
+function drawDebugPixel(x, y, color) {
+    // Store debug info for later rendering
+    debugInfo.push({
+        type: 'pixel',
+        x: x,
+        y: y,
+        color: color
+    });
+}
+
+// Draw a debug rectangle fill
+function drawDebugFill(x, y, width, height, color) {
+    // Store debug info for later rendering
+    debugInfo.push({
+        type: 'fill',
+        x: x,
+        y: y,
+        width: width,
+        height: height,
+        color: color
     });
 }
 
@@ -539,29 +812,34 @@ let lastTime = 0;
 
 // Main game loop
 function gameLoop(timestamp) {
-    // Calculate time delta
-    const deltaTime = (timestamp - lastTime) / 1000;
+    // Calculate delta time
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Cap at 0.1 seconds
     lastTime = timestamp;
     
-    // Cap delta time to prevent large jumps
-    const dt = Math.min(deltaTime, 0.1);
+    // Update game state
+    update(dt);
     
-    if (gameRunning) {
-        update(dt);
-    }
-    
+    // Render the game
     render();
     
+    // Request next frame
     requestAnimationFrame(gameLoop);
 }
 
 // Update game state
 function update(dt) {
-    updateCharacter(dt);
-    updateEnemies(dt);
-    updateCollectibles(dt);
-    updateCamera();
-    checkCollisions();
+    if (gameRunning) {
+        updateCharacter(dt);
+        updateEnemies(dt);
+        updateCollectibles(dt);
+        updateCamera();
+        
+        // Clear debug info for this frame
+        debugInfo = [];
+        
+        // Check for collisions
+        checkCollisions();
+    }
 }
 
 // Update character position and state
@@ -924,6 +1202,9 @@ function checkVerticalCollision(x, newY) {
 // Update enemies
 function updateEnemies(dt) {
     enemies.forEach(enemy => {
+        // Skip defeated enemies
+        if (enemy.defeated) return;
+        
         // Move enemy
         enemy.x += enemy.vel_x * dt;
         
@@ -986,20 +1267,37 @@ function checkCollisions() {
     
     // Check enemies
     enemies.forEach(enemy => {
-        if (checkRectCollision(
-            character.pos_x, character.pos_y, character.width, character.height,
-            enemy.x, enemy.y, enemy.width, enemy.height
-        )) {
-            // Check if character is landing on top of enemy
-            if (character.vel_y > 0 && character.pos_y + character.height < enemy.y + enemy.height / 2) {
-                // Bounce off enemy
-                character.vel_y = character.jumpSpeed * 0.7;
-                enemy.vel_x = 0; // "Defeat" the enemy by stopping it
-                score += 50;
-            } else {
-                // Character hit by enemy
-                loseLife();
-            }
+        // Skip defeated enemies
+        if (enemy.defeated) return;
+        
+        // First check if character is landing on top of enemy using a simpler check
+        const characterBottom = character.pos_y + character.height;
+        const characterFeet = characterBottom - 2; // Just the bottom 2 pixels of the character
+        const enemyTop = enemy.y;
+        
+        // For debugging, draw the "feet" area
+        if (DEBUG_MODE) {
+            drawDebugFill(character.pos_x, characterBottom - 2, character.width, 2, 'rgba(0, 0, 255, 0.5)'); // Semi-transparent blue
+            drawDebugFill(enemy.x, enemy.y, enemy.width, 2, 'rgba(255, 165, 0, 0.5)'); // Semi-transparent orange
+        }
+        
+        if (character.vel_y > 0 && // Character is falling
+            characterFeet <= enemyTop && // Character's feet are at or above enemy's top
+            characterBottom >= enemyTop && // Character's bottom is at or below enemy's top
+            character.pos_x + 4 < enemy.x + enemy.width && // Horizontal overlap check
+            character.pos_x + character.width - 4 > enemy.x) {
+            
+            // Character is landing on top of enemy
+            character.vel_y = character.jumpSpeed * 0.7; // Bounce
+            enemy.defeated = true; // Defeat the enemy
+            score += 50;
+            return; // Skip further checks for this enemy
+        }
+        
+        // If not landing on top, check for other collisions
+        if (checkCharacterEnemyCollision(enemy)) {
+            // Character hit by enemy
+            loseLife();
         }
     });
 }
@@ -1029,25 +1327,59 @@ function render() {
     ctx.fillStyle = '#87CEEB'; // Sky blue background
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw the map
+    // Draw game elements
     drawMap();
-    
-    // Draw collectibles
     drawCollectibles();
-    
-    // Draw enemies
     drawEnemies();
-    
-    // Draw the character
     drawCharacter();
     
     // Draw UI
     drawUI();
     
-    // Draw game over screen if needed
+    // Draw debug visualization if enabled
+    if (DEBUG_MODE) {
+        renderDebugInfo();
+    }
+    
     if (!gameRunning) {
         drawGameOver();
     }
+}
+
+// Render debug information
+function renderDebugInfo() {
+    debugInfo.forEach(info => {
+        switch(info.type) {
+            case 'box':
+                ctx.strokeStyle = info.color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(
+                    info.x - camera.x,
+                    info.y,
+                    info.width,
+                    info.height
+                );
+                break;
+            case 'pixel':
+                ctx.fillStyle = info.color;
+                ctx.fillRect(
+                    info.x - camera.x,
+                    info.y,
+                    1,
+                    1
+                );
+                break;
+            case 'fill':
+                ctx.fillStyle = info.color;
+                ctx.fillRect(
+                    info.x - camera.x,
+                    info.y,
+                    info.width,
+                    info.height
+                );
+                break;
+        }
+    });
 }
 
 // Draw the map
@@ -1147,28 +1479,33 @@ function drawCoin(coin) {
 // Draw enemies
 function drawEnemies() {
     enemies.forEach(enemy => {
-        if (enemy.vel_x !== 0) { // Only draw active enemies
-            // Draw based on enemy type
-            switch(enemy.type) {
-                case 'slime':
-                    drawSlimeEnemy(enemy);
-                    break;
-                case 'robot':
-                    drawRobotEnemy(enemy);
-                    break;
-                case 'bat':
-                    drawBatEnemy(enemy);
-                    break;
-                default:
-                    // Fallback to simple rectangle
-                    ctx.fillStyle = '#FF00FF'; // Magenta
-                    ctx.fillRect(
-                        enemy.x - camera.x,
-                        enemy.y,
-                        enemy.width,
-                        enemy.height
-                    );
-            }
+        // Skip defeated enemies or draw them differently
+        if (enemy.defeated) {
+            // Draw defeated state (optional)
+            drawDefeatedEnemy(enemy);
+            return;
+        }
+        
+        // Draw based on enemy type
+        switch(enemy.type) {
+            case 'slime':
+                drawSlimeEnemy(enemy);
+                break;
+            case 'robot':
+                drawRobotEnemy(enemy);
+                break;
+            case 'bat':
+                drawBatEnemy(enemy);
+                break;
+            default:
+                // Fallback to simple rectangle
+                ctx.fillStyle = '#FF00FF'; // Magenta
+                ctx.fillRect(
+                    enemy.x - camera.x,
+                    enemy.y,
+                    enemy.width,
+                    enemy.height
+                );
         }
     });
 }
@@ -1208,6 +1545,11 @@ function drawSlimeEnemy(enemy) {
         ctx.fillRect(baseX + 6, baseY + 12, 4, 1);
     } else {
         ctx.fillRect(baseX + 5, baseY + 13, 6, 1);
+    }
+    
+    // Debug: Draw the pixel mask outline
+    if (DEBUG_MODE) {
+        drawPixelMask(enemy.pixelMasks[frame], baseX, baseY);
     }
 }
 
@@ -1250,6 +1592,11 @@ function drawRobotEnemy(enemy) {
     ctx.fillStyle = '#666666';
     ctx.fillRect(baseX + 1, baseY + 6, 1, 4);
     ctx.fillRect(baseX + 14, baseY + 6, 1, 4);
+    
+    // Debug: Draw the pixel mask outline
+    if (DEBUG_MODE) {
+        drawPixelMask(enemy.pixelMasks[frame], baseX, baseY);
+    }
 }
 
 // Draw a bat enemy
@@ -1283,6 +1630,26 @@ function drawBatEnemy(enemy) {
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(baseX + 6, baseY + 12, 1, 2);
     ctx.fillRect(baseX + 9, baseY + 12, 1, 2);
+    
+    // Debug: Draw the pixel mask outline
+    if (DEBUG_MODE) {
+        drawPixelMask(enemy.pixelMasks[frame], baseX, baseY);
+    }
+}
+
+// Draw a pixel mask for debugging
+function drawPixelMask(mask, baseX, baseY) {
+    if (!mask) return;
+    
+    ctx.strokeStyle = '#FF0000'; // Red outline
+    
+    for (let y = 0; y < mask.length; y++) {
+        for (let x = 0; x < mask[y].length; x++) {
+            if (mask[y][x]) {
+                ctx.strokeRect(baseX + x, baseY + y, 1, 1);
+            }
+        }
+    }
 }
 
 // Draw the character
@@ -1343,6 +1710,16 @@ function drawGameOver() {
     ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
     ctx.fillText('Press R to restart', canvas.width / 2, canvas.height / 2 + 40);
     ctx.textAlign = 'left';
+}
+
+// Draw a defeated enemy (optional)
+function drawDefeatedEnemy(enemy) {
+    const baseX = enemy.x - camera.x;
+    const baseY = enemy.y;
+    
+    // Draw a simple "defeated" state - you can customize this
+    ctx.fillStyle = '#888888'; // Gray color for defeated enemies
+    ctx.fillRect(baseX + 4, baseY + 12, 8, 4); // Flattened shape
 }
 
 // Initialize the game
