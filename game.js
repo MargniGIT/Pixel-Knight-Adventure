@@ -72,8 +72,8 @@ let DEBUG_MODE = false; // Add debug mode flag
 let debugInfo = []; // Array to store debug visualization data
 
 // Sound system
-const soundEnabled = true;
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let soundEnabled = false; // Start with sound disabled until user interaction
+let audioContext = null;
 const sounds = {
     jump: null,
     coin: null,
@@ -83,9 +83,14 @@ const sounds = {
 
 // Initialize sounds
 function initSounds() {
-    if (!soundEnabled) return;
-    
     try {
+        // Create audio context on first user interaction
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        if (!soundEnabled || !audioContext) return;
+        
         // Jump sound - short upward beep
         sounds.jump = createSound(function(time) {
             const oscillator = audioContext.createOscillator();
@@ -125,7 +130,7 @@ function initSounds() {
 // Create a simple sound
 function createSound(setupOscillator, duration) {
     return function(volume = 0.2) {
-        if (!soundEnabled) return;
+        if (!soundEnabled || !audioContext) return;
         
         try {
             const time = audioContext.currentTime;
@@ -156,7 +161,7 @@ function createLoopingMusic() {
     let noteIndex = 0;
     
     function playNote() {
-        if (!soundEnabled || !isPlaying) return;
+        if (!soundEnabled || !audioContext || !isPlaying) return;
         
         try {
             const time = audioContext.currentTime;
@@ -183,7 +188,7 @@ function createLoopingMusic() {
     
     return {
         play: function() {
-            if (isPlaying) return;
+            if (isPlaying || !soundEnabled || !audioContext) return;
             
             isPlaying = true;
             noteIndex = 0;
@@ -203,6 +208,64 @@ function playSound(soundName, volume) {
     sounds[soundName](volume);
 }
 
+// Enable sounds after user interaction
+function enableSounds() {
+    soundEnabled = true;
+    
+    // Initialize audio context if needed
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } else if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    
+    // Initialize sounds
+    initSounds();
+    
+    // Start background music
+    if (sounds.backgroundMusic) {
+        sounds.backgroundMusic.play();
+    }
+    
+    // Update sound button
+    const soundButton = document.getElementById('sound-button');
+    if (soundButton) {
+        soundButton.textContent = '🔊';
+        soundButton.style.backgroundColor = '#0a0';
+    }
+    
+    console.log("Sounds enabled");
+}
+
+// Disable sounds
+function disableSounds() {
+    soundEnabled = false;
+    
+    // Stop background music
+    if (sounds.backgroundMusic) {
+        sounds.backgroundMusic.stop();
+    }
+    
+    // Update sound button
+    const soundButton = document.getElementById('sound-button');
+    if (soundButton) {
+        soundButton.textContent = '🔇';
+        soundButton.style.backgroundColor = '#444';
+    }
+    
+    console.log("Sounds disabled");
+}
+
+// Toggle sounds
+function toggleSounds() {
+    if (soundEnabled) {
+        disableSounds();
+    } else {
+        enableSounds();
+    }
+}
+
+// Initialize the game
 function init() {
     console.log("Initializing game...");
     
@@ -243,8 +306,8 @@ function init() {
     setupEventListeners();
     setupButtonControls();
     
-    // Initialize sounds
-    initSounds();
+    // Add sound button
+    createSoundButton();
     
     // Start game loop
     lastTime = performance.now();
@@ -258,13 +321,17 @@ function init() {
         }
     });
     
-    // Start background music after a user interaction
-    window.addEventListener('click', function startMusic() {
-        if (sounds.backgroundMusic) {
-            sounds.backgroundMusic.play();
-            window.removeEventListener('click', startMusic);
-        }
-    });
+    // Enable sounds on user interaction
+    const enableSoundOnInteraction = function() {
+        enableSounds();
+        window.removeEventListener('click', enableSoundOnInteraction);
+        window.removeEventListener('keydown', enableSoundOnInteraction);
+        window.removeEventListener('touchstart', enableSoundOnInteraction);
+    };
+    
+    window.addEventListener('click', enableSoundOnInteraction);
+    window.addEventListener('keydown', enableSoundOnInteraction);
+    window.addEventListener('touchstart', enableSoundOnInteraction);
     
     console.log("Game initialized");
 }
@@ -1891,6 +1958,33 @@ function drawDefeatedEnemy(enemy) {
     // Draw respawn progress bar
     ctx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // Semi-transparent green
     ctx.fillRect(baseX, baseY - 5, respawnWidth, 2);
+}
+
+// Create sound toggle button
+function createSoundButton() {
+    const soundButton = document.createElement('button');
+    soundButton.id = 'sound-button';
+    soundButton.textContent = '🔇';
+    soundButton.style.position = 'absolute';
+    soundButton.style.top = '10px';
+    soundButton.style.right = '10px';
+    soundButton.style.width = '40px';
+    soundButton.style.height = '40px';
+    soundButton.style.fontSize = '20px';
+    soundButton.style.backgroundColor = '#444';
+    soundButton.style.color = '#fff';
+    soundButton.style.border = 'none';
+    soundButton.style.borderRadius = '5px';
+    soundButton.style.cursor = 'pointer';
+    soundButton.style.zIndex = '1000';
+    
+    soundButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSounds();
+    });
+    
+    document.body.appendChild(soundButton);
 }
 
 // Initialize the game
