@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Screenshot - Pixel Knight Adventure</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+        }
+        .instructions {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        iframe {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Take a Screenshot of Pixel Knight Adventure</h1>
+    
+    <div class="instructions">
+        <p>This page will help you take a screenshot of your game for the README.md file.</p>
+        <ol>
+            <li>The game is loaded in the iframe below.</li>
+            <li>Play the game to get to a good-looking scene.</li>
+            <li>Press the "Take Screenshot" button.</li>
+            <li>The screenshot will be downloaded as "screenshot.png".</li>
+            <li>Move the screenshot.png file to your project folder.</li>
+        </ol>
+    </div>
+    
+    <iframe src="index.html" id="gameFrame"></iframe>
+    
+    <button class="button" onclick="takeScreenshot()">Take Screenshot</button>
+    <a href="index.html" class="button">Back to Game</a>
+    
+    <script>
+        function takeScreenshot() {
+            const iframe = document.getElementById('gameFrame');
+            const canvas = iframe.contentWindow.document.getElementById('gameCanvas');
+            
+            if (canvas) {
+                // Create a link element
+                const link = document.createElement('a');
+                link.download = 'screenshot.png';
+                
+                // Convert canvas to data URL and set as link's href
+                link.href = canvas.toDataURL('image/png');
+                
+                // Append link to body, click it, and remove it
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                alert('Screenshot saved! Move the screenshot.png file to your project folder.');
+            } else {
+                alert('Could not find the game canvas. Make sure the game is loaded properly.');
+            }
+        }
+    </script>
+</body>
+</html> 
